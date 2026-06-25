@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout private source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: nitutravels/fintimesnews-automation
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
