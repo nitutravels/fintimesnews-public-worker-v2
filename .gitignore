@@ -1,0 +1,11 @@
+anchor.png
+anchor_audio.wav
+avatar-results/
+private/
+output/
+*.mp4
+*.wav
+*.zip
+*.b64
+__pycache__/
+*.pyc
