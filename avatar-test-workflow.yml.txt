@@ -1,0 +1,73 @@
+name: Encrypted CPU Avatar Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render-avatar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
+      AZURE_SPEECH_REGION: ${{ secrets.AZURE_SPEECH_REGION }}
+
+    steps:
+      - name: Checkout public worker
+        uses: actions/checkout@v7
+      - name: Checkout private source
+        uses: actions/checkout@v7
+        with:
+          repository: nitutravels/fintimesnews-automation
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: private
+          persist-credentials: false
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg p7zip-full git libgl1 libglib2.0-0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.8'
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade 'pip<25' 'setuptools<70' wheel
+          pip install requests==2.32.4
+      - name: Prepare private inputs
+        run: |
+          mkdir -p "$RUNNER_TEMP/fintimes-avatar-test/audio"
+          base64 --decode private/assets/anchor/fintimes_anchor_512.png.b64 > "$RUNNER_TEMP/fintimes-avatar-test/anchor.png"
+          cp scripts/preflight_story_template.json "$RUNNER_TEMP/fintimes-avatar-test/story.json"
+          python private/scripts/azure_tts.py --story "$RUNNER_TEMP/fintimes-avatar-test/story.json" --output "$RUNNER_TEMP/fintimes-avatar-test/audio"
+          ffmpeg -y -i "$RUNNER_TEMP/fintimes-avatar-test/audio/scene_01.mp3" -t 5 -ac 1 -ar 16000 -c:a pcm_s16le "$RUNNER_TEMP/fintimes-avatar-test/narration.wav"
+      - name: Restore SadTalker cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/fintimes-sadtalker-v1
+          key: sadtalker-cpu-v1-${{ runner.os }}-py38-${{ hashFiles('scripts/run_sadtalker_cpu.sh') }}
+      - name: Render CPU avatar
+        run: |
+          chmod +x scripts/run_sadtalker_cpu.sh
+          timeout 18000 bash scripts/run_sadtalker_cpu.sh "$RUNNER_TEMP/fintimes-avatar-test/anchor.png" "$RUNNER_TEMP/fintimes-avatar-test/narration.wav" "$RUNNER_TEMP/fintimes-avatar-test/results"
+          RESULT="$(find "$RUNNER_TEMP/fintimes-avatar-test/results" -maxdepth 1 -name '*.mp4' -type f | sort | tail -n 1)"
+          cp "$RESULT" "$RUNNER_TEMP/fintimes-avatar-test/fintimes-avatar-cpu-test.mp4"
+      - name: Encrypt result
+        run: |
+          PASSWORD="$(tr -d '\r\n' < private/status/avatar_artifact_password.txt)"
+          cd "$RUNNER_TEMP/fintimes-avatar-test"
+          7z a -t7z -mhe=on -mx=5 -p"$PASSWORD" "$GITHUB_WORKSPACE/fintimes-avatar-test-encrypted.7z" fintimes-avatar-cpu-test.mp4 >/dev/null
+      - name: Remove raw private files
+        run: rm -rf private "$RUNNER_TEMP/fintimes-avatar-test"
+      - name: Upload encrypted result
+        uses: actions/upload-artifact@v7
+        with:
+          name: fintimes-avatar-test-encrypted
+          path: fintimes-avatar-test-encrypted.7z
+          archive: false
+          retention-days: 1
+      - name: Final cleanup
+        if: always()
+        run: rm -rf private "$RUNNER_TEMP/fintimes-avatar-test" fintimes-avatar-test-encrypted.7z
