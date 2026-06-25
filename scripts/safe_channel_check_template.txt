@@ -1,0 +1,1 @@
+The manual preflight uses the official Google client libraries from the private repository to check the connected channel without uploading content.
