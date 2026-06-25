@@ -1,0 +1,32 @@
+name: Connection Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout private source
+        uses: actions/checkout@v4
+        with:
+          repository: nitutravels/fintimesnews-automation
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: source
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Validate connection
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f source/requirements.txt
+          test -f source/scripts/build_daily_story.py
+          test -f source/assets/anchor/fintimes_anchor_512.png.b64
+          echo 'Connection test passed.'
+      - name: Clean temporary checkout
+        if: always()
+        run: rm -rf source
