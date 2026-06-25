@@ -1,0 +1,1 @@
+Manual test: validate configured secret names, create a generic cloud voice sample, render a generic video, and retain it briefly as a workflow artifact. No private portrait and no publishing.
