@@ -1,0 +1,82 @@
+{
+  "date": "25 June 2026",
+  "edition": "market-close",
+  "title": "Oil Falls, Sensex and Nifty Rise: What It Means for India",
+  "subtitle": "Why cheaper crude helped Indian shares and the rupee on 25 June 2026",
+  "source_line": "Sources: Reuters India equity and rupee market reports, 25 June 2026",
+  "source_url": "https://www.reuters.com/world/india/indian-shares-set-rise-after-oil-slips-pre-iran-war-levels-2026-06-25/",
+  "secondary_source_url": "https://www.reuters.com/world/india/rupee-rally-oil-slide-below-pre-iran-war-levels-bucks-asia-weakness-2026-06-25/",
+  "disclaimer": "News and education only. Not investment advice. Market prices can change quickly.",
+  "voice": "en-IN-NeerjaNeural",
+  "style": "newscast",
+  "rate": "-5%",
+  "primary_keyword": "India stock market news June 25 2026",
+  "secondary_keywords": [
+    "Sensex news",
+    "Nifty 50 news",
+    "crude oil price India",
+    "Indian rupee news",
+    "India market explained",
+    "stock market for beginners",
+    "Fintimes News"
+  ],
+  "thumbnail_text": "OIL DOWN, INDIA UP?",
+  "scenes": [
+    {
+      "kicker": "FINTIMES NEWS - MARKET EXPLAINER",
+      "heading": "OIL FELL. INDIA'S MARKETS ROSE.",
+      "body": "Cheaper crude reduced worries about inflation and India's import bill.",
+      "badge": "25 JUNE 2026",
+      "accent": "#42DDEA",
+      "narration": "Yesterday, oil prices fell and Indian markets moved higher. The simple reason is that India buys a large amount of oil from other countries, so cheaper oil can reduce pressure on the economy."
+    },
+    {
+      "kicker": "WHAT HAPPENED?",
+      "heading": "SENSEX AND NIFTY CLOSED HIGHER",
+      "body": "Nifty 50 ended at 24,056. Sensex closed at 77,100.47. Both gained 0.14 percent.",
+      "badge": "THIRD WEEKLY GAIN",
+      "accent": "#5E9BFF",
+      "narration": "The Nifty Fifty rose zero point one four percent to twenty-four thousand fifty-six. The Sensex also gained zero point one four percent and closed at seventy-seven thousand one hundred point four seven. This completed a third straight weekly gain."
+    },
+    {
+      "kicker": "WHY DID OIL MATTER?",
+      "heading": "LOWER OIL CAN CUT INDIA'S COSTS",
+      "body": "Brent crude fell to roughly 72 to 73 dollars a barrel, near levels seen before the Iran war.",
+      "badge": "IMPORT RELIEF",
+      "accent": "#43CD82",
+      "narration": "Brent crude fell to roughly seventy-two to seventy-three dollars a barrel. When oil becomes cheaper, fuel, transport and factory cost worries can ease. It can also reduce pressure on inflation and India's current account."
+    },
+    {
+      "kicker": "RUPEE EFFECT",
+      "heading": "THE RUPEE STRENGTHENED",
+      "body": "The rupee gained about 0.3 percent and closed near 94.3950 per US dollar.",
+      "badge": "CURRENCY RELIEF",
+      "accent": "#42DDEA",
+      "narration": "The rupee also became a little stronger. It gained about zero point three percent and closed near ninety-four point three nine five zero per US dollar. Lower oil and signs of foreign investment inflows helped sentiment."
+    },
+    {
+      "kicker": "WHO BENEFITED?",
+      "heading": "BANKS AND AIRLINES GOT SUPPORT",
+      "body": "Financial shares gained during the week, while IndiGo rose sharply as fuel-cost concerns eased.",
+      "badge": "LOWER COST HOPES",
+      "accent": "#8B7CFF",
+      "narration": "Banks and financial companies received support from hopes of easier money flows. Airline shares also benefited because fuel is a major cost. IndiGo rose eight point five percent during Thursday's session."
+    },
+    {
+      "kicker": "THE RISK SIDE",
+      "heading": "THE GOOD NEWS HAS LIMITS",
+      "body": "Markets gave back much of their early rise. Monsoon risks and possible US rate hikes remain important.",
+      "badge": "STAY CAUTIOUS",
+      "accent": "#F2C14F",
+      "narration": "But this was not a perfect rally. The market had risen more than one percent during the day before profit taking reduced the gain. A weak monsoon, higher US interest rates or another oil-price jump could quickly change the mood."
+    },
+    {
+      "kicker": "WHAT COMES NEXT?",
+      "heading": "WATCH OIL, FOREIGN FLOWS AND RAIN",
+      "body": "If oil stays lower, inflation and import pressure may ease. If it rises again, the benefit can disappear.",
+      "badge": "BALANCED OUTLOOK",
+      "accent": "#F49243",
+      "narration": "What happens next depends on three things: oil prices, foreign money coming into India, and the monsoon. Lower oil can help the rupee, businesses and family budgets. Higher oil can reverse those benefits. This is news and education, not investment advice."
+    }
+  ]
+}
