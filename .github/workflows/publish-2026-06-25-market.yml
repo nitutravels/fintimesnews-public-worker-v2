@@ -1,0 +1,159 @@
+name: Publish 25 June India Market Explainer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/publish-2026-06-25-market.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-2026-06-25-market
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    env:
+      AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
+      AZURE_SPEECH_REGION: ${{ secrets.AZURE_SPEECH_REGION }}
+      YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+      YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+      YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+      YOUTUBE_PRIVACY_STATUS: public
+      YOUTUBE_MADE_FOR_KIDS: "false"
+      YOUTUBE_NOTIFY_SUBSCRIBERS: "true"
+
+    steps:
+      - name: Checkout public worker
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Checkout private Fintimes source
+        uses: actions/checkout@v7
+        with:
+          repository: nitutravels/fintimesnews-automation
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: private
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            AZURE_SPEECH_KEY \
+            AZURE_SPEECH_REGION \
+            YOUTUBE_CLIENT_ID \
+            YOUTUBE_CLIENT_SECRET \
+            YOUTUBE_REFRESH_TOKEN
+          do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing secret: $name"
+              exit 1
+            fi
+          done
+
+          test -f stories/2026-06-25-india-markets.json
+          test -f private/assets/anchor/fintimes_anchor_512.png.b64
+          test -f private/scripts/azure_tts.py
+          test -f private/scripts/generate_video.py
+          test -f private/scripts/create_brand_package.py
+          test -f private/scripts/seo_metadata.py
+          test -f private/scripts/youtube_upload.py
+
+      - name: Set up production Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: private/requirements.txt
+
+      - name: Install production tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            ffmpeg \
+            fonts-dejavu-core \
+            git \
+            libgl1 \
+            libglib2.0-0
+          python -m pip install --upgrade pip
+          pip install -r private/requirements.txt numpy
+
+      - name: Build narrated news video
+        run: bash scripts/build_market_base.sh
+
+      - name: Set up presenter Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.8"
+
+      - name: Restore presenter cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/fintimes-sadtalker-v1
+          key: sadtalker-cpu-v1-${{ runner.os }}-py38-${{ hashFiles('scripts/run_sadtalker_cpu.sh') }}
+          restore-keys: |
+            sadtalker-cpu-v1-${{ runner.os }}-py38-
+
+      - name: Render presenter segment
+        run: bash scripts/render_news_presenter.sh
+
+      - name: Assemble final video
+        run: bash scripts/compose_market_video.sh
+
+      - name: Restore production Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Finalize search metadata
+        shell: bash
+        run: |
+          cd private
+          python ../scripts/finalize_market_metadata.py \
+            --metadata output/youtube_metadata.json \
+            --story story.json \
+            --video output/fintimes_market_2026_06_25_ai_anchor.mp4 \
+            --thumbnail output/thumbnail_16x9.jpg
+
+      - name: Publish to YouTube
+        working-directory: private
+        run: python scripts/youtube_upload.py
+
+      - name: Save publication files
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fintimes-25-june-market-publication
+          path: |
+            private/output/fintimes_market_2026_06_25_ai_anchor.mp4
+            private/output/thumbnail_16x9.jpg
+            private/output/youtube_metadata.json
+            private/output/youtube_metadata.txt
+            private/output/youtube_result.json
+          retention-days: 3
+          if-no-files-found: warn
+
+      - name: Clean private files
+        if: always()
+        shell: bash
+        run: |
+          rm -rf private
+          rm -f \
+            "$RUNNER_TEMP/fintimes-anchor.png" \
+            "$RUNNER_TEMP/fintimes-anchor-audio.wav" \
+            "$RUNNER_TEMP/fintimes-presenter.mp4" \
+            "$RUNNER_TEMP/fintimes-presenter-scene.mp4"
+          rm -rf "$RUNNER_TEMP/fintimes-avatar-results"
