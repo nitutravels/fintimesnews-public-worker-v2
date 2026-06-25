@@ -1,0 +1,1 @@
+The CPU avatar test uses an encrypted artifact and does not publish to YouTube.
