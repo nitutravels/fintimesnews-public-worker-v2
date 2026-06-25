@@ -1,0 +1,156 @@
+name: Preproduction Secret and Render Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
+      AZURE_SPEECH_REGION: ${{ secrets.AZURE_SPEECH_REGION }}
+      YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+      YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+      YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+
+    steps:
+      - name: Checkout public worker
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Checkout private Fintimes source
+        uses: actions/checkout@v7
+        with:
+          repository: nitutravels/fintimesnews-automation
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: source
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate required secret names
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            AZURE_SPEECH_KEY \
+            AZURE_SPEECH_REGION \
+            YOUTUBE_CLIENT_ID \
+            YOUTUBE_CLIENT_SECRET \
+            YOUTUBE_REFRESH_TOKEN
+          do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing repository secret: $name"
+              exit 1
+            fi
+          done
+          echo "All required secret names are configured."
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: source/requirements.txt
+
+      - name: Install rendering tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade pip
+          pip install -r source/requirements.txt numpy
+
+      - name: Verify connected YouTube channel without uploading
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+
+          from google.oauth2.credentials import Credentials
+          from googleapiclient.discovery import build
+
+          scopes = [
+              "https://www.googleapis.com/auth/youtube.upload",
+              "https://www.googleapis.com/auth/youtube.force-ssl",
+          ]
+
+          credentials = Credentials(
+              token=None,
+              refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"],
+              token_uri="https://oauth2.googleapis.com/token",
+              client_id=os.environ["YOUTUBE_CLIENT_ID"],
+              client_secret=os.environ["YOUTUBE_CLIENT_SECRET"],
+              scopes=scopes,
+          )
+
+          youtube = build(
+              "youtube",
+              "v3",
+              credentials=credentials,
+              cache_discovery=False,
+          )
+
+          response = youtube.channels().list(
+              part="snippet,status,contentDetails",
+              mine=True,
+          ).execute()
+
+          items = response.get("items", [])
+          if not items:
+              raise RuntimeError(
+                  "The YouTube credentials did not return a connected channel."
+              )
+
+          channel = items[0]
+          result = {
+              "channel_id": channel.get("id"),
+              "channel_title": channel.get("snippet", {}).get("title"),
+              "privacy_status": channel.get("status", {}).get("privacyStatus"),
+              "upload_playlist": (
+                  channel.get("contentDetails", {})
+                  .get("relatedPlaylists", {})
+                  .get("uploads")
+              ),
+          }
+
+          print(json.dumps(result, indent=2))
+          PY
+
+      - name: Generate generic Azure voice sample
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp scripts/preflight_story_template.json source/story.json
+          cd source
+          rm -rf output
+          mkdir -p output
+          python scripts/azure_tts.py --story story.json --output output
+
+      - name: Render generic video sample
+        working-directory: source
+        run: python scripts/generate_video.py --story story.json --output output
+
+      - name: Save short-lived generic sample
+        uses: actions/upload-artifact@v4
+        with:
+          name: fintimes-preproduction-sample
+          path: |
+            source/output/fintimes_neural_voice_test_16x9.mp4
+            source/output/thumbnail_16x9.jpg
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Remove temporary private checkout
+        if: always()
+        shell: bash
+        run: rm -rf source
