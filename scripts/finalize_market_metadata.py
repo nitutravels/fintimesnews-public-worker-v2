@@ -45,7 +45,10 @@ def main() -> None:
         "#Sensex #Nifty50 #CrudeOil #IndianRupee #IndiaStockMarket #FintimesNews",
     ]
 
-    metadata["title"] = "Oil Falls, Sensex & Nifty Rise: What It Means for India | Fintimes News"
+    # This corrected studio edition deliberately uses a distinct accurate title
+    # so YouTube duplicate protection cannot skip it because of an earlier
+    # rendering attempt with the superseded close-up layout.
+    metadata["title"] = "Oil Falls, Sensex & Nifty Rise: India Market Close Explained | Fintimes News"
     metadata["description"] = "\n".join(lines)[:5000]
     metadata["tags"] = [
         "India stock market news",
