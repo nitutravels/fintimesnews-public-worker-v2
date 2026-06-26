@@ -54,16 +54,19 @@ mkdir -p "$RESULT_DIR"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-2}"
 export MKL_NUM_THREADS="${MKL_NUM_THREADS:-2}"
 
+# Preserve the complete approved presenter artwork. The previous crop mode
+# enlarged the face and created an unwanted close-up. SadTalker's documented
+# full mode animates the detected face and places it back into the full frame.
 "$VENV/bin/python" inference.py \
   --cpu \
   --driven_audio "$AUDIO" \
   --source_image "$IMAGE" \
   --result_dir "$RESULT_DIR" \
   --still \
-  --preprocess crop \
+  --preprocess full \
   --size 256 \
   --batch_size 1 \
-  --expression_scale 0.9
+  --expression_scale 0.75
 
 RESULT="$(find "$RESULT_DIR" -maxdepth 1 -type f -name '*.mp4' | sort | tail -n 1)"
 test -n "$RESULT"
