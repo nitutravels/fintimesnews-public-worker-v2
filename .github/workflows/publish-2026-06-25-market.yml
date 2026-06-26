@@ -1,4 +1,5 @@
 name: Publish 25 June India Market Explainer
+run-name: Publish 25 June India Market Explainer
 
 on:
   workflow_dispatch:
@@ -25,19 +26,21 @@ jobs:
       YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
       YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
       YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+      YOUTUBE_PLAYLIST_ID: ${{ secrets.YOUTUBE_PLAYLIST_ID }}
       YOUTUBE_PRIVACY_STATUS: public
       YOUTUBE_MADE_FOR_KIDS: "false"
       YOUTUBE_NOTIFY_SUBSCRIBERS: "true"
+      PYTHONUNBUFFERED: "1"
 
     steps:
       - name: Checkout public worker
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
           fetch-depth: 1
 
       - name: Checkout private Fintimes source
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6
         with:
           repository: nitutravels/fintimesnews-automation
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
@@ -57,16 +60,23 @@ jobs:
             YOUTUBE_REFRESH_TOKEN
           do
             if [[ -z "${!name:-}" ]]; then
-              echo "::error::Missing secret: $name"
+              echo "::error::Missing repository secret: $name"
               exit 1
             fi
           done
 
           test -f stories/2026-06-25-india-markets.json
+          test -f scripts/build_market_base.sh
+          test -f scripts/render_news_presenter.sh
+          test -f scripts/compose_market_video.sh
+          test -f scripts/create_safe_brand_package.py
+          test -f scripts/create_market_assets.py
+          test -f scripts/finalize_market_metadata.py
+          test -f scripts/run_sadtalker_cpu.sh
+          test -f private/requirements.txt
           test -f private/assets/anchor/fintimes_anchor_512.png.b64
           test -f private/scripts/azure_tts.py
           test -f private/scripts/generate_video.py
-          test -f private/scripts/create_brand_package.py
           test -f private/scripts/seo_metadata.py
           test -f private/scripts/youtube_upload.py
 
@@ -128,9 +138,35 @@ jobs:
             --video output/fintimes_market_2026_06_25_ai_anchor.mp4 \
             --thumbnail output/thumbnail_16x9.jpg
 
+      - name: Validate publication assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s private/output/fintimes_market_2026_06_25_ai_anchor.mp4
+          test -s private/output/thumbnail_16x9.jpg
+          test -s private/output/youtube_metadata.json
+          ffprobe -v error \
+            -show_entries format=duration,size \
+            -of default=noprint_wrappers=1 \
+            private/output/fintimes_market_2026_06_25_ai_anchor.mp4
+          file private/output/thumbnail_16x9.jpg | grep -q 'JPEG image data'
+
       - name: Publish to YouTube
         working-directory: private
         run: python scripts/youtube_upload.py
+
+      - name: Record publication result
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat private/output/youtube_result.json
+          {
+            echo '## YouTube publication result'
+            echo '```json'
+            cat private/output/youtube_result.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Save publication files
         if: always()
