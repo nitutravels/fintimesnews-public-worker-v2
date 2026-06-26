@@ -1,6 +1,6 @@
 name: Trigger 25 June Publication
 
-# Retry requested on 26 June 2026.
+# Corrected studio retry requested on 26 June 2026.
 on:
   push:
     branches: [main]
@@ -15,7 +15,26 @@ jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
-      - name: Start verified 25 June publication workflow
+      - name: Cancel superseded publication attempts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run list \
+            --repo "${{ github.repository }}" \
+            --workflow publish-2026-06-25-market.yml \
+            --limit 20 \
+            --json databaseId,status \
+            --jq '.[] | select(.status == "in_progress" or .status == "queued") | .databaseId' \
+          | while read -r run_id; do
+              [[ -z "$run_id" ]] && continue
+              echo "Cancelling superseded run $run_id"
+              gh run cancel "$run_id" --repo "${{ github.repository }}" || true
+            done
+          sleep 10
+
+      - name: Start corrected 25 June publication workflow
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run publish-2026-06-25-market.yml --repo "${{ github.repository }}" --ref main
