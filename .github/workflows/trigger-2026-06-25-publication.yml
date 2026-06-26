@@ -1,6 +1,6 @@
 name: Trigger 25 June Publication
 
-# Corrected studio retry requested on 26 June 2026.
+# Modern dimensional studio retry requested on 26 June 2026.
 on:
   push:
     branches: [main]
@@ -34,7 +34,7 @@ jobs:
             done
           sleep 10
 
-      - name: Start corrected 25 June publication workflow
+      - name: Start modern studio publication workflow
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run publish-2026-06-25-market.yml --repo "${{ github.repository }}" --ref main
