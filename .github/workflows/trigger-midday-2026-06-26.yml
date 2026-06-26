@@ -1,0 +1,23 @@
+name: Trigger 26 June Midday Production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/trigger-midday-2026-06-26.yml
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start Fintimes midday edition
+        env:
+          GH_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN }}
+        run: |
+          gh workflow run azure-neural-video.yml \
+            --repo nitutravels/fintimesnews-automation \
+            --ref main \
+            -f edition=midday
