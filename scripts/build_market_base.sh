@@ -5,6 +5,21 @@ cp stories/2026-06-25-india-markets.json private/story.json
 rm -rf private/output
 mkdir -p private/output
 
+# The current Ubuntu runner ships a newer FFmpeg build that rejects the
+# zoompan expression used by the older private branding script. Patch only
+# the temporary checkout to use a static 25 fps frame with the same fades.
+python - <<'PY'
+from pathlib import Path
+
+path = Path("private/scripts/create_brand_package.py")
+text = path.read_text(encoding="utf-8")
+old = "scale=1320:742,zoompan=z='{zoom}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={int(duration*FPS)}:s=1280x720:fps={FPS},"
+new = "scale=1280:720,setsar=1,fps={FPS},"
+if old not in text:
+    raise RuntimeError("Expected branding filter was not found")
+path.write_text(text.replace(old, new), encoding="utf-8")
+PY
+
 pushd private >/dev/null
 python scripts/azure_tts.py --story story.json --output output
 python scripts/generate_video.py --story story.json --output output
