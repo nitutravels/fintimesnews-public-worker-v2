@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
@@ -52,13 +54,15 @@ def rounded(draw: ImageDraw.ImageDraw, box, radius: int, fill, outline=None, wid
 def create_studio(story: dict, output: Path) -> None:
     image = gradient_background()
     draw = ImageDraw.Draw(image)
+    now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
+    published = now_ist.strftime("Published %d %b %Y | %I:%M %p IST")
 
     draw.rectangle((0, 0, W, 94), fill=(1, 16, 34, 242))
     rounded(draw, (25, 20, 132, 70), 13, (180, 37, 37, 255))
     draw.ellipse((40, 34, 52, 46), fill=(255, 255, 255, 255))
     draw.text((61, 27), "NEWS", font=load_font(24, True), fill=(255, 255, 255, 255))
     draw.text((157, 19), "FINTIMES NEWS", font=load_font(40, True), fill=(246, 250, 255, 255))
-    draw.text((903, 28), "Published 26 Jun 2026 IST", font=load_font(20, True), fill=(72, 220, 232, 255))
+    draw.text((750, 31), published, font=load_font(18, True), fill=(72, 220, 232, 255))
 
     rounded(draw, (30, 112, 660, 625), 22, (3, 26, 54, 225), outline=(42, 192, 222, 255), width=3)
     draw.text((54, 131), "AI NEWS PRESENTER", font=load_font(22, True), fill=(71, 222, 234, 255))
@@ -81,7 +85,7 @@ def create_studio(story: dict, output: Path) -> None:
         rounded(draw, (714, y, 1220, y + 70), 13, (8, 42, 77, 235), outline=(34, 116, 158, 255), width=2)
         draw.text((735, y + 11), label, font=load_font(17, True), fill=(176, 199, 222, 255))
         draw.text((892, y + 9), value, font=load_font(23, True), fill=(250, 252, 255, 255))
-        change_fill = (75, 225, 154, 255) if change not in {"LOWER"} else (80, 221, 232, 255)
+        change_fill = (75, 225, 154, 255) if change != "LOWER" else (80, 221, 232, 255)
         draw.text((1103, y + 13), change, font=load_font(17, True), fill=change_fill, anchor="ma")
         y += 82
 
