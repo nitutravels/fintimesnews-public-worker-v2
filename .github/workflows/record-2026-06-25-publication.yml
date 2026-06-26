@@ -1,0 +1,86 @@
+name: Record 25 June Publication Result
+
+on:
+  workflow_run:
+    workflows:
+      - Publish 25 June India Market Explainer
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout public worker
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Download publication artifact when available
+        if: github.event.workflow_run.conclusion == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/fintimes-publication
+          gh run download "$RUN_ID" \
+            --repo "${{ github.repository }}" \
+            --name fintimes-25-june-market-publication \
+            --dir /tmp/fintimes-publication
+
+      - name: Write observable result
+        env:
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p status
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          candidates = list(Path('/tmp/fintimes-publication').rglob('youtube_result.json'))
+          result = {}
+          if candidates:
+              result = json.loads(candidates[0].read_text(encoding='utf-8'))
+
+          payload = {
+              'workflow': 'Publish 25 June India Market Explainer',
+              'editionDate': '2026-06-25',
+              'runId': os.environ['RUN_ID'],
+              'runUrl': os.environ['RUN_URL'],
+              'conclusion': os.environ['RUN_CONCLUSION'],
+              'headSha': os.environ['HEAD_SHA'],
+              'recordedAtUtc': datetime.now(timezone.utc).isoformat(),
+              'youtube': result,
+          }
+          Path('status/2026-06-25-market-publication.json').write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False) + '\n',
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Commit publication result
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "fintimes-automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add status/2026-06-25-market-publication.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Record corrected 25 June publication result [skip ci]"
+          git -c rebase.autoStash=true pull --rebase origin main
+          git push origin HEAD:main
