@@ -5,18 +5,42 @@ import json
 from pathlib import Path
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--metadata", required=True)
-    parser.add_argument("--story", required=True)
-    parser.add_argument("--video", required=True)
-    parser.add_argument("--thumbnail", required=True)
-    args = parser.parse_args()
+def compact(value: str) -> str:
+    return " ".join(str(value).split())
 
-    metadata_path = Path(args.metadata)
-    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    story = json.loads(Path(args.story).read_text(encoding="utf-8"))
 
+def write_outputs(metadata_path: Path, metadata: dict) -> None:
+    metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
+    Path("output/youtube_metadata.txt").write_text(
+        "TITLE\n"
+        + metadata["title"]
+        + "\n\nDESCRIPTION\n"
+        + metadata["description"]
+        + "\n\nTAGS\n"
+        + ", ".join(metadata.get("tags", []))
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def finalize_dynamic(metadata: dict, story: dict, edition_label: str) -> None:
+    base_title = compact(story.get("title", "Midday Market Explainer"))
+    suffix = f" | {edition_label} | Fintimes News"
+    if len(base_title) + len(suffix) <= 100:
+        title = base_title + suffix
+    else:
+        title = base_title[: 100 - len(" | Fintimes News")].rstrip(" -|:") + " | Fintimes News"
+
+    description = str(metadata.get("description", "")).strip()
+    description += (
+        "\n\nFORMAT\nProfessional split-screen Fintimes newsroom with an AI-assisted presenter, "
+        "neural narration and explanatory graphics."
+    )
+    metadata["title"] = title[:100]
+    metadata["description"] = description[:5000]
+
+
+def finalize_static_market_close(metadata: dict, story: dict) -> None:
     old_description = metadata.get("description", "")
     chapters = "00:00 Fintimes News Intro"
     if "CHAPTERS\n" in old_description:
@@ -37,7 +61,7 @@ def main() -> None:
         "SOURCES",
         story["source_line"],
         story["source_url"],
-        story["secondary_source_url"],
+        story.get("secondary_source_url", ""),
         "",
         "This video uses an AI-assisted presenter, neural narration and explanatory graphics.",
         story["disclaimer"],
@@ -45,9 +69,6 @@ def main() -> None:
         "#Sensex #Nifty50 #CrudeOil #IndianRupee #IndiaStockMarket #FintimesNews",
     ]
 
-    # This corrected studio edition deliberately uses a distinct accurate title
-    # so YouTube duplicate protection cannot skip it because of an earlier
-    # rendering attempt with the superseded close-up layout.
     metadata["title"] = "Oil Falls, Sensex & Nifty Rise: India Market Close Explained | Fintimes News"
     metadata["description"] = "\n".join(lines)[:5000]
     metadata["tags"] = [
@@ -64,17 +85,32 @@ def main() -> None:
         "financial news India",
         "Fintimes News",
     ]
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--metadata", required=True)
+    parser.add_argument("--story", required=True)
+    parser.add_argument("--video", required=True)
+    parser.add_argument("--thumbnail", required=True)
+    parser.add_argument("--edition-label", default="")
+    args = parser.parse_args()
+
+    metadata_path = Path(args.metadata)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    story = json.loads(Path(args.story).read_text(encoding="utf-8"))
+
+    if args.edition_label:
+        finalize_dynamic(metadata, story, args.edition_label)
+    else:
+        finalize_static_market_close(metadata, story)
+
     metadata["categoryId"] = "25"
     metadata["defaultLanguage"] = "en"
     metadata["containsSyntheticMedia"] = True
     metadata["thumbnail"] = args.thumbnail
     metadata["video"] = args.video
-
-    metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
-    Path("output/youtube_metadata.txt").write_text(
-        "TITLE\n" + metadata["title"] + "\n\nDESCRIPTION\n" + metadata["description"] + "\n\nTAGS\n" + ", ".join(metadata["tags"]) + "\n",
-        encoding="utf-8",
-    )
+    write_outputs(metadata_path, metadata)
 
 
 if __name__ == "__main__":
