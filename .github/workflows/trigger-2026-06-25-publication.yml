@@ -1,5 +1,6 @@
 name: Trigger 25 June Publication
 
+# Retry requested on 26 June 2026.
 on:
   push:
     branches: [main]
