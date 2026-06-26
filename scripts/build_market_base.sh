@@ -10,7 +10,10 @@ python scripts/azure_tts.py --story story.json --output output
 python scripts/generate_video.py --story story.json --output output
 popd >/dev/null
 
-python scripts/create_safe_brand_package.py \
+# The approved Fintimes intro, disclaimer, outro and original music are owned by
+# the private production repository. Do not replace them with the public safe
+# fallback package unless an operator explicitly requests a fallback render.
+python private/scripts/create_brand_package.py \
   --main-video private/output/fintimes_neural_voice_test_16x9.mp4 \
   --output private/output
 
