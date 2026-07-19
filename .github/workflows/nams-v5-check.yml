@@ -1,0 +1,29 @@
+name: NAMS v5 validation
+on:
+  push:
+    branches: [nams-hybrid-installer]
+    paths:
+      - 'nams-v5/**'
+      - '.github/workflows/nams-v5-check.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        run: node --check nams-v5/app/index.js
+      - name: Check shell syntax
+        run: |
+          bash -n nams-v5/install-v5.sh
+          bash -n nams-v5/cloudshell-replace-v5.sh
+      - name: Check JSON files
+        run: |
+          python -m json.tool nams-v5/app/package.json >/dev/null
+          python -m json.tool nams-v5/config/catalog.json >/dev/null
+      - name: Check Compose configuration
+        run: docker compose -f nams-v5/docker-compose.yml config >/dev/null
