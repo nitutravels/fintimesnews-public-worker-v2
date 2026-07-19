@@ -1,0 +1,97 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [nams]
+
+  app:
+    build: ./app
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config:ro
+      - ./assets:/app/assets
+    depends_on:
+      lightpanda:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+      chromium:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks: [nams]
+
+  lightpanda:
+    image: lightpanda/browser:nightly
+    command:
+      - serve
+      - --obey-robots
+      - --host
+      - 0.0.0.0
+      - --advertise-host
+      - lightpanda
+      - --port
+      - "9222"
+      - --cdp-max-connections
+      - "4"
+      - --storage-engine
+      - sqlite
+      - --storage-sqlite-path
+      - /data/lightpanda.sqlite
+    restart: unless-stopped
+    volumes:
+      - ./data/lightpanda:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9222/json/version >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks: [nams]
+
+  chromium:
+    build: ./chromium
+    restart: unless-stopped
+    shm_size: 1gb
+    volumes:
+      - ./data/chromium:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9223/json/version >/dev/null && curl -fsS http://127.0.0.1:6080/vnc.html >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks: [nams]
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    networks: [nams]
+
+networks:
+  nams:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
+  ollama_data:
