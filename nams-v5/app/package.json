@@ -1,0 +1,17 @@
+{
+  "name": "nams-v5-authority-agent",
+  "version": "5.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "cheerio": "^1.0.0",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.1.0",
+    "http-proxy-middleware": "^3.0.5",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^7.0.3",
+    "playwright-core": "1.61.0",
+    "robots-parser": "^3.0.1"
+  }
+}
