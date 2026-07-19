@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Google Business Profile",
+    "domain": "business.google.com",
+    "landing_url": "https://business.google.com/",
+    "category": "local citation",
+    "mode": "browser",
+    "priority": 100,
+    "expected_verification": true,
+    "notes": "Free official Google business profile management and verification flow."
+  },
+  {
+    "name": "Bing Places for Business",
+    "domain": "bingplaces.com",
+    "landing_url": "https://www.bingplaces.com/",
+    "category": "local citation",
+    "mode": "browser",
+    "priority": 95,
+    "expected_verification": true,
+    "notes": "Free official Bing listing claim/add flow."
+  },
+  {
+    "name": "Apple Business Connect",
+    "domain": "businessconnect.apple.com",
+    "landing_url": "https://businessconnect.apple.com/",
+    "category": "local citation",
+    "mode": "browser",
+    "priority": 95,
+    "expected_verification": true,
+    "notes": "Free official Apple business registration and place-card management."
+  },
+  {
+    "name": "Mappls Add a Place",
+    "domain": "embed.mappls.com",
+    "landing_url": "https://embed.mappls.com/addAplace",
+    "category": "Delhi NCR map citation",
+    "mode": "browser",
+    "priority": 90,
+    "expected_verification": false,
+    "notes": "Indian mapping platform add-place workflow."
+  },
+  {
+    "name": "Foursquare Business Listings",
+    "domain": "foursquare.com",
+    "landing_url": "https://foursquare.com/products/business-listings/",
+    "category": "business citation",
+    "mode": "browser",
+    "priority": 80,
+    "expected_verification": true,
+    "notes": "Official claim or create business listing flow."
+  },
+  {
+    "name": "Pre Wedding Shoot Delhi guest contribution",
+    "domain": "preweddingshootdelhi.com",
+    "landing_url": "https://www.preweddingshootdelhi.com/write-for-us/",
+    "category": "wedding editorial",
+    "mode": "editorial",
+    "priority": 70,
+    "expected_verification": false,
+    "notes": "Delhi wedding editorial opportunity requiring original useful content and an author bio."
+  }
+]
