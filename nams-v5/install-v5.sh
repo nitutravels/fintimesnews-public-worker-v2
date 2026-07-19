@@ -15,7 +15,7 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y ca-certificates curl git openssl ufw dnsutils
+apt-get install -y ca-certificates curl git openssl ufw dnsutils python3
 
 if ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sh
@@ -66,6 +66,19 @@ rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR"
 cp -a "$TMP/repo/nams-v5/." "$APP_DIR/"
 mkdir -p "$APP_DIR/data/lightpanda" "$APP_DIR/data/chromium" "$APP_DIR/assets"
+
+# Ensure the noVNC WebSocket proxy is attached to the Node HTTP upgrade event.
+python3 - <<'PY'
+from pathlib import Path
+p=Path('/opt/nams-v5/app/index.js')
+s=p.read_text()
+old="app.listen(8080,'0.0.0.0',()=>{log('info','NAMS v5 started',{domain:DOMAIN,model:MODEL});console.log('NAMS v5 ready on 8080');});"
+new="const server=app.listen(8080,'0.0.0.0',()=>{log('info','NAMS v5 started',{domain:DOMAIN,model:MODEL});console.log('NAMS v5 ready on 8080');});\nserver.on('upgrade',browserProxy.upgrade);"
+if old in s:
+    p.write_text(s.replace(old,new))
+elif "server.on('upgrade',browserProxy.upgrade);" not in s:
+    raise SystemExit('Could not install WebSocket upgrade hook')
+PY
 
 cat >"$APP_DIR/.env" <<ENV
 TZ=Asia/Kolkata
