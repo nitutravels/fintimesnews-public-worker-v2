@@ -1,38 +1,38 @@
 {
-  "run_id": 29785040562,
-  "run_url": "https://github.com/nitutravels/fintimesnews-public-worker-v2/actions/runs/29785040562",
+  "run_id": 29788222888,
+  "run_url": "https://github.com/nitutravels/fintimesnews-public-worker-v2/actions/runs/29788222888",
   "conclusion": "failure",
-  "head_sha": "50f8ba24c99ca2696918f769901a843fa49e4f41",
-  "recorded_at": "2026-07-20T22:59:53Z",
+  "head_sha": "1bf9e499c3d501cd9740ce5ac7af3bfd48c39f2c",
+  "recorded_at": "2026-07-20T23:58:40Z",
   "jobs": [
     {
-      "id": 88494613854,
+      "id": 88504223307,
       "name": "Build and certify immutable ARM64 release",
       "status": "completed",
-      "conclusion": "failure",
-      "started_at": "2026-07-20T22:46:14Z",
-      "completed_at": "2026-07-20T22:59:45Z",
-      "html_url": "https://github.com/nitutravels/fintimesnews-public-worker-v2/actions/runs/29785040562/job/88494613854",
-      "failed_steps": [
-        {
-          "number": 8,
-          "name": "Build and smoke-test Chromium/noVNC on AMD64 and ARM64",
-          "status": "completed",
-          "conclusion": "failure",
-          "started_at": "2026-07-20T22:50:06Z",
-          "completed_at": "2026-07-20T22:59:40Z"
-        }
-      ]
+      "conclusion": "success",
+      "started_at": "2026-07-20T23:45:28Z",
+      "completed_at": "2026-07-20T23:58:14Z",
+      "html_url": "https://github.com/nitutravels/fintimesnews-public-worker-v2/actions/runs/29788222888/job/88504223307",
+      "failed_steps": []
     },
     {
-      "id": 88496885801,
+      "id": 88506170793,
       "name": "Install, cut over and verify Oracle production",
       "status": "completed",
-      "conclusion": "skipped",
-      "started_at": "2026-07-20T22:59:45Z",
-      "completed_at": "2026-07-20T22:59:45Z",
-      "html_url": "https://github.com/nitutravels/fintimesnews-public-worker-v2/actions/runs/29785040562/job/88496885801",
-      "failed_steps": []
+      "conclusion": "failure",
+      "started_at": "2026-07-20T23:58:17Z",
+      "completed_at": "2026-07-20T23:58:26Z",
+      "html_url": "https://github.com/nitutravels/fintimesnews-public-worker-v2/actions/runs/29788222888/job/88506170793",
+      "failed_steps": [
+        {
+          "number": 4,
+          "name": "Check unavoidable OCI credential requirements",
+          "status": "completed",
+          "conclusion": "failure",
+          "started_at": "2026-07-20T23:58:22Z",
+          "completed_at": "2026-07-20T23:58:22Z"
+        }
+      ]
     }
   ]
 }
