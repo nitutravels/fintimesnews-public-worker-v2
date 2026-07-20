@@ -8,6 +8,17 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev
 COPY index.js ./
+RUN python3 - <<'PY'
+from pathlib import Path
+p=Path('/app/index.js')
+s=p.read_text()
+old="app.listen(8080,'0.0.0.0',()=>{log('info','NAMS v5 started',{domain:DOMAIN,model:MODEL});console.log('NAMS v5 ready on 8080');});"
+new="const server=app.listen(8080,'0.0.0.0',()=>{log('info','NAMS v5 started',{domain:DOMAIN,model:MODEL});console.log('NAMS v5 ready on 8080');});\nserver.on('upgrade',browserProxy.upgrade);"
+if old in s:
+    p.write_text(s.replace(old,new))
+elif "server.on('upgrade',browserProxy.upgrade);" not in s:
+    raise SystemExit('Expected NAMS listen statement not found')
+PY
 RUN mkdir -p /app/data /app/assets /app/config
 
 EXPOSE 8080
