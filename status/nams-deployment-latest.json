@@ -1,0 +1,38 @@
+{
+  "run_id": 29785040562,
+  "run_url": "https://github.com/nitutravels/fintimesnews-public-worker-v2/actions/runs/29785040562",
+  "conclusion": "failure",
+  "head_sha": "50f8ba24c99ca2696918f769901a843fa49e4f41",
+  "recorded_at": "2026-07-20T22:59:53Z",
+  "jobs": [
+    {
+      "id": 88494613854,
+      "name": "Build and certify immutable ARM64 release",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-07-20T22:46:14Z",
+      "completed_at": "2026-07-20T22:59:45Z",
+      "html_url": "https://github.com/nitutravels/fintimesnews-public-worker-v2/actions/runs/29785040562/job/88494613854",
+      "failed_steps": [
+        {
+          "number": 8,
+          "name": "Build and smoke-test Chromium/noVNC on AMD64 and ARM64",
+          "status": "completed",
+          "conclusion": "failure",
+          "started_at": "2026-07-20T22:50:06Z",
+          "completed_at": "2026-07-20T22:59:40Z"
+        }
+      ]
+    },
+    {
+      "id": 88496885801,
+      "name": "Install, cut over and verify Oracle production",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-07-20T22:59:45Z",
+      "completed_at": "2026-07-20T22:59:45Z",
+      "html_url": "https://github.com/nitutravels/fintimesnews-public-worker-v2/actions/runs/29785040562/job/88496885801",
+      "failed_steps": []
+    }
+  ]
+}
