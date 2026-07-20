@@ -5,6 +5,7 @@ on:
     branches: [nams-hybrid-installer]
     paths:
       - 'nams-v5/app/**'
+      - 'nams-v5/chromium/**'
       - '.github/workflows/nams-v6-prebuilt.yml'
   workflow_dispatch:
 
@@ -14,16 +15,17 @@ permissions:
 
 concurrency:
   group: nams-v6-prebuilt
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ghcr.io/nitutravels/nams-v6-app
+  APP_IMAGE: ghcr.io/nitutravels/nams-v6-app
+  CHROMIUM_IMAGE: ghcr.io/nitutravels/nams-v6-chromium
 
 jobs:
   build-test-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Checkout deployment branch
         uses: actions/checkout@v4
@@ -41,7 +43,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build amd64 test image
+      - name: Build amd64 app test image
         uses: docker/build-push-action@v6
         with:
           context: nams-v5/app
@@ -51,11 +53,11 @@ jobs:
           cache-from: type=gha,scope=nams-v6-app
           cache-to: type=gha,mode=max,scope=nams-v6-app
 
-      - name: Smoke test dashboard health
+      - name: Smoke test app dashboard and health
         run: |
           set -euo pipefail
           mkdir -p /tmp/nams-test/data /tmp/nams-test/assets
-          docker run -d --rm --name nams-v6-smoke \
+          docker run -d --rm --name nams-v6-app-smoke \
             -e ADMIN_TOKEN=test-token \
             -e NAMS_DOMAIN=localhost \
             -e LIGHTPANDA_CDP=http://127.0.0.1:9 \
@@ -66,6 +68,7 @@ jobs:
             -v /tmp/nams-test/assets:/app/assets \
             -p 18080:8080 \
             nams-v6-app:test
+          trap 'docker logs nams-v6-app-smoke || true; docker rm -f nams-v6-app-smoke >/dev/null 2>&1 || true' EXIT
           for i in $(seq 1 40); do
             if curl -fsS http://127.0.0.1:18080/health | tee /tmp/health.json; then break; fi
             sleep 2
@@ -73,26 +76,68 @@ jobs:
           grep -q '"ok"' /tmp/health.json
           curl -fsS -H 'Authorization: Bearer test-token' http://127.0.0.1:18080/ >/tmp/dashboard.html
           grep -q 'NAMS' /tmp/dashboard.html
-          docker logs nams-v6-smoke
 
-      - name: Publish multi-architecture image
+      - name: Build amd64 Chromium test image
+        uses: docker/build-push-action@v6
+        with:
+          context: nams-v5/chromium
+          platforms: linux/amd64
+          load: true
+          tags: nams-v6-chromium:test
+          cache-from: type=gha,scope=nams-v6-chromium
+          cache-to: type=gha,mode=max,scope=nams-v6-chromium
+
+      - name: Smoke test Chromium CDP and noVNC
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name nams-v6-chromium-smoke \
+            --shm-size=1g \
+            -p 19223:9223 -p 16080:6080 \
+            nams-v6-chromium:test
+          trap 'docker logs nams-v6-chromium-smoke || true; docker rm -f nams-v6-chromium-smoke >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:19223/json/version >/tmp/chrome.json 2>/dev/null && \
+               curl -fsS http://127.0.0.1:16080/vnc.html >/tmp/vnc.html 2>/dev/null; then break; fi
+            sleep 2
+          done
+          grep -q 'webSocketDebuggerUrl' /tmp/chrome.json
+          grep -qi 'noVNC' /tmp/vnc.html
+
+      - name: Publish app multi-architecture image
         uses: docker/build-push-action@v6
         with:
           context: nams-v5/app
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ env.IMAGE_NAME }}:latest
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.APP_IMAGE }}:latest
+            ${{ env.APP_IMAGE }}:${{ github.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=nams-v6-app
           cache-to: type=gha,mode=max,scope=nams-v6-app
 
-      - name: Verify published ARM manifest
+      - name: Publish Chromium multi-architecture image
+        uses: docker/build-push-action@v6
+        with:
+          context: nams-v5/chromium
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.CHROMIUM_IMAGE }}:latest
+            ${{ env.CHROMIUM_IMAGE }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=nams-v6-chromium
+          cache-to: type=gha,mode=max,scope=nams-v6-chromium
+
+      - name: Verify published manifests
         run: |
           set -euo pipefail
-          docker buildx imagetools inspect "${IMAGE_NAME}:${GITHUB_SHA}" | tee /tmp/manifest.txt
-          grep -q 'linux/arm64' /tmp/manifest.txt
-          grep -q 'linux/amd64' /tmp/manifest.txt
+          for image in "$APP_IMAGE" "$CHROMIUM_IMAGE"; do
+            docker buildx imagetools inspect "${image}:${GITHUB_SHA}" | tee "/tmp/$(basename "$image").manifest.txt"
+            grep -q 'linux/arm64' "/tmp/$(basename "$image").manifest.txt"
+            grep -q 'linux/amd64' "/tmp/$(basename "$image").manifest.txt"
+          done
