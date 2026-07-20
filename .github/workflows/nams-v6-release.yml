@@ -18,21 +18,25 @@ concurrency:
 env:
   APP_IMAGE: ghcr.io/nitutravels/nams-v6-app
   CHROMIUM_IMAGE: ghcr.io/nitutravels/nams-v6-chromium
-  SOURCE_REF: nams-hybrid-installer
+  SOURCE_REF: c74d8660d516e9330a9ad4f24742b10c43c487c4
 
 jobs:
   certify:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - name: Checkout NAMS source branch
+      - name: Checkout immutable NAMS source revision
         uses: actions/checkout@v4
         with:
           ref: ${{ env.SOURCE_REF }}
 
-      - name: Resolve immutable source revision
+      - name: Resolve and verify immutable source revision
         id: source
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          test "$sha" = "$SOURCE_REF"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
