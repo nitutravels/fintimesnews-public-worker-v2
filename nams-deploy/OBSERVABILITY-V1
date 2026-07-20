@@ -1,0 +1,3 @@
+NAMS deployment observer enabled.
+
+This marker intentionally triggers one deployment run after exact job/step/log capture was added. Future corrective runs must be triggered only by targeted code or configuration changes based on the recorded evidence in status/nams-deployment-latest.json and status/nams-deployment-failed.log.
