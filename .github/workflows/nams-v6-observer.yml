@@ -1,0 +1,65 @@
+name: NAMS deployment observer
+
+on:
+  workflow_run:
+    workflows: ["NAMS certify, install and complete"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: nams-deployment-observer
+  cancel-in-progress: false
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      RUN_URL: ${{ github.event.workflow_run.html_url }}
+      RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Collect exact job and step result
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p status
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" > /tmp/jobs-pages.json
+          jq -s '{jobs:(map(.jobs[]) | map({id,name,status,conclusion,started_at,completed_at,html_url,failed_steps:[.steps[]? | select(.conclusion=="failure" or .conclusion=="cancelled" or .conclusion=="timed_out") | {number,name,status,conclusion,started_at,completed_at}]}))}' /tmp/jobs-pages.json > /tmp/jobs.json
+
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/failed.log 2>&1 || true
+          tail -n 800 /tmp/failed.log > status/nams-deployment-failed.log
+
+          jq -n \
+            --arg run_id "$RUN_ID" \
+            --arg run_url "$RUN_URL" \
+            --arg conclusion "$RUN_CONCLUSION" \
+            --arg head_sha "$HEAD_SHA" \
+            --arg recorded_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --slurpfile jobs /tmp/jobs.json \
+            '{run_id:($run_id|tonumber),run_url:$run_url,conclusion:$conclusion,head_sha:$head_sha,recorded_at:$recorded_at,jobs:$jobs[0].jobs}' \
+            > status/nams-deployment-latest.json
+
+      - name: Commit diagnostic evidence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add status/nams-deployment-latest.json status/nams-deployment-failed.log
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Record NAMS deployment result for run ${RUN_ID} [skip ci]"
+          for attempt in 1 2 3 4 5; do
+            if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+            sleep $((attempt*5))
+          done
+          exit 1
