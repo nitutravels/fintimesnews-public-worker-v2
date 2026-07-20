@@ -1,42 +1,52 @@
-name: NAMS v6 certified release
+name: NAMS certify, install and complete
+run-name: NAMS production deployment ${{ github.run_number }}
 
 on:
   push:
     branches: [main]
     paths:
       - '.github/workflows/nams-v6-release.yml'
+      - 'nams-deploy/**'
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
+  actions: read
 
 concurrency:
-  group: nams-v6-certified-release
-  cancel-in-progress: true
+  group: nams-production-deployment
+  cancel-in-progress: false
 
 env:
+  SOURCE_REF: c74d8660d516e9330a9ad4f24742b10c43c487c4
+  IMAGE_TAG: c74d8660d516e9330a9ad4f24742b10c43c487c4
   APP_IMAGE: ghcr.io/nitutravels/nams-v6-app
   CHROMIUM_IMAGE: ghcr.io/nitutravels/nams-v6-chromium
-  SOURCE_REF: c74d8660d516e9330a9ad4f24742b10c43c487c4
 
 jobs:
   certify:
+    name: Build and certify immutable ARM64 release
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 100
     steps:
-      - name: Checkout immutable NAMS source revision
+      - name: Checkout immutable application source
         uses: actions/checkout@v4
         with:
           ref: ${{ env.SOURCE_REF }}
 
-      - name: Resolve and verify immutable source revision
-        id: source
+      - name: Verify source revision and required files
+        shell: bash
         run: |
-          set -euo pipefail
-          sha="$(git rev-parse HEAD)"
-          test "$sha" = "$SOURCE_REF"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_REF"
+          test -f nams-v5/app/Dockerfile
+          test -f nams-v5/app/package.json
+          test -f nams-v5/app/index.js
+          test -f nams-v5/chromium/Dockerfile
+          test -f nams-v5/chromium/supervisord.conf
+          test -f nams-v6/docker-compose.yml
+          test -f nams-v6/Caddyfile
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -44,107 +54,239 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GHCR
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build app smoke-test image
-        uses: docker/build-push-action@v6
-        with:
-          context: nams-v5/app
-          platforms: linux/amd64
-          load: true
-          tags: nams-v6-app:test
-
-      - name: Test app health and authenticated dashboard
+      - name: Build and smoke-test app on AMD64 and ARM64
+        shell: bash
         run: |
-          set -euo pipefail
-          mkdir -p /tmp/nams-test/data /tmp/nams-test/assets
-          docker run -d --name nams-v6-app-smoke \
-            -e ADMIN_TOKEN=test-token \
-            -e NAMS_DOMAIN=localhost \
-            -e LIGHTPANDA_CDP=http://127.0.0.1:9 \
-            -e CHROMIUM_CDP=http://127.0.0.1:9 \
-            -e OLLAMA_BASE_URL=http://127.0.0.1:9 \
-            -v "$PWD/nams-v5/config:/app/config:ro" \
-            -v /tmp/nams-test/data:/app/data \
-            -v /tmp/nams-test/assets:/app/assets \
-            -p 18080:8080 nams-v6-app:test
-          trap 'docker logs nams-v6-app-smoke || true; docker rm -f nams-v6-app-smoke >/dev/null 2>&1 || true' EXIT
-          for i in $(seq 1 45); do
-            curl -fsS http://127.0.0.1:18080/health >/tmp/health.json 2>/dev/null && break
-            sleep 2
-          done
-          grep -q '"ok"' /tmp/health.json
-          curl -fsS -H 'Authorization: Bearer test-token' http://127.0.0.1:18080/ >/tmp/dashboard.html
-          grep -q 'NAMS' /tmp/dashboard.html
+          set -Eeuo pipefail
+          cleanup(){ docker ps -aq --filter 'name=nams-app-smoke-' | xargs -r docker rm -f >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          smoke_app(){
+            platform="$1"; image="$2"; name="$3"; port="$4"
+            mkdir -p "/tmp/$name/data" "/tmp/$name/assets"
+            docker run -d --platform "$platform" --name "$name" \
+              -e ADMIN_TOKEN=test-token -e NAMS_DOMAIN=localhost \
+              -e LIGHTPANDA_CDP=http://127.0.0.1:9 \
+              -e CHROMIUM_CDP=http://127.0.0.1:9 \
+              -e OLLAMA_BASE_URL=http://127.0.0.1:9 \
+              -v "$PWD/nams-v5/config:/app/config:ro" \
+              -v "/tmp/$name/data:/app/data" -v "/tmp/$name/assets:/app/assets" \
+              -p "$port:8080" "$image"
+            ready=0
+            for _ in $(seq 1 150); do
+              if curl -fsS "http://127.0.0.1:$port/health" >/tmp/health.json 2>/dev/null; then ready=1; break; fi
+              sleep 2
+            done
+            if [ "$ready" -ne 1 ]; then docker logs "$name"; exit 1; fi
+            grep -q '"ok"' /tmp/health.json
+            curl -fsS -H 'Authorization: Bearer test-token' "http://127.0.0.1:$port/" >/tmp/dashboard.html
+            grep -q NAMS /tmp/dashboard.html
+            docker rm -f "$name" >/dev/null
+          }
+          docker buildx build --platform linux/amd64 --load -t nams-app-smoke-amd64 nams-v5/app
+          smoke_app linux/amd64 nams-app-smoke-amd64 nams-app-smoke-amd64 18080
+          docker buildx build --platform linux/arm64 --load -t nams-app-smoke-arm64 nams-v5/app
+          smoke_app linux/arm64 nams-app-smoke-arm64 nams-app-smoke-arm64 18081
 
-      - name: Build Chromium smoke-test image
-        uses: docker/build-push-action@v6
-        with:
-          context: nams-v5/chromium
-          platforms: linux/amd64
-          load: true
-          tags: nams-v6-chromium:test
-
-      - name: Test Chromium CDP and noVNC
+      - name: Build and smoke-test Chromium/noVNC on AMD64 and ARM64
+        shell: bash
         run: |
-          set -euo pipefail
-          docker run -d --name nams-v6-chromium-smoke --shm-size=1g \
-            -p 19223:9223 -p 16080:6080 nams-v6-chromium:test
-          trap 'docker logs nams-v6-chromium-smoke || true; docker rm -f nams-v6-chromium-smoke >/dev/null 2>&1 || true' EXIT
-          for i in $(seq 1 75); do
-            if curl -fsS http://127.0.0.1:19223/json/version >/tmp/chromium.json 2>/dev/null && \
-               curl -fsS http://127.0.0.1:16080/vnc.html >/tmp/novnc.html 2>/dev/null; then break; fi
-            sleep 2
-          done
-          grep -q 'webSocketDebuggerUrl' /tmp/chromium.json
-          grep -qi 'noVNC' /tmp/novnc.html
+          set -Eeuo pipefail
+          cleanup(){ docker ps -aq --filter 'name=nams-chromium-smoke-' | xargs -r docker rm -f >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          smoke_chromium(){
+            platform="$1"; image="$2"; name="$3"; cdp="$4"; vnc="$5"
+            docker run -d --platform "$platform" --name "$name" --shm-size=1g -p "$cdp:9223" -p "$vnc:6080" "$image"
+            ready=0
+            for _ in $(seq 1 240); do
+              if curl -fsS "http://127.0.0.1:$cdp/json/version" >/tmp/chromium.json 2>/dev/null && curl -fsS "http://127.0.0.1:$vnc/vnc.html" >/tmp/novnc.html 2>/dev/null; then ready=1; break; fi
+              sleep 2
+            done
+            if [ "$ready" -ne 1 ]; then docker logs "$name"; exit 1; fi
+            grep -q webSocketDebuggerUrl /tmp/chromium.json
+            grep -qi noVNC /tmp/novnc.html
+            docker rm -f "$name" >/dev/null
+          }
+          docker buildx build --platform linux/amd64 --load -t nams-chromium-smoke-amd64 nams-v5/chromium
+          smoke_chromium linux/amd64 nams-chromium-smoke-amd64 nams-chromium-smoke-amd64 19223 16080
+          docker buildx build --platform linux/arm64 --load -t nams-chromium-smoke-arm64 nams-v5/chromium
+          smoke_chromium linux/arm64 nams-chromium-smoke-arm64 nams-chromium-smoke-arm64 19224 16081
 
-      - name: Publish app for amd64 and arm64
-        uses: docker/build-push-action@v6
-        with:
-          context: nams-v5/app
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ env.APP_IMAGE }}:latest
-            ${{ env.APP_IMAGE }}:${{ steps.source.outputs.sha }}
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ steps.source.outputs.sha }}
-
-      - name: Publish Chromium for amd64 and arm64
-        uses: docker/build-push-action@v6
-        with:
-          context: nams-v5/chromium
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ env.CHROMIUM_IMAGE }}:latest
-            ${{ env.CHROMIUM_IMAGE }}:${{ steps.source.outputs.sha }}
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ steps.source.outputs.sha }}
-
-      - name: Verify published multi-architecture manifests
+      - name: Publish immutable multi-architecture app image
+        shell: bash
         run: |
-          set -euo pipefail
-          tag='${{ steps.source.outputs.sha }}'
-          for image in "$APP_IMAGE" "$CHROMIUM_IMAGE"; do
-            docker buildx imagetools inspect "$image:$tag" | tee /tmp/manifest.txt
-            grep -q 'linux/amd64' /tmp/manifest.txt
-            grep -q 'linux/arm64' /tmp/manifest.txt
-          done
-          printf 'SOURCE_SHA=%s\nAPP_IMAGE=%s:%s\nCHROMIUM_IMAGE=%s:%s\n' \
-            "$tag" "$APP_IMAGE" "$tag" "$CHROMIUM_IMAGE" "$tag" | tee nams-v6-release.txt
+          set -Eeuo pipefail
+          docker buildx build nams-v5/app \
+            --platform linux/amd64,linux/arm64 --push \
+            --cache-from type=gha,scope=nams-app \
+            --cache-to type=gha,mode=max,scope=nams-app \
+            --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=$SOURCE_REF" \
+            -t "$APP_IMAGE:$IMAGE_TAG" -t "$APP_IMAGE:latest"
 
-      - name: Upload release metadata
+      - name: Publish immutable multi-architecture Chromium image
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          docker buildx build nams-v5/chromium \
+            --platform linux/amd64,linux/arm64 --push \
+            --cache-from type=gha,scope=nams-chromium \
+            --cache-to type=gha,mode=max,scope=nams-chromium \
+            --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=$SOURCE_REF" \
+            -t "$CHROMIUM_IMAGE:$IMAGE_TAG" -t "$CHROMIUM_IMAGE:latest"
+
+      - name: Verify published manifests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for image in "$APP_IMAGE:$IMAGE_TAG" "$CHROMIUM_IMAGE:$IMAGE_TAG"; do
+            docker buildx imagetools inspect "$image" | tee manifest.txt
+            grep -q linux/amd64 manifest.txt
+            grep -q linux/arm64 manifest.txt
+          done
+          jq -n --arg source "$SOURCE_REF" --arg app "$APP_IMAGE:$IMAGE_TAG" --arg chromium "$CHROMIUM_IMAGE:$IMAGE_TAG" \
+            '{status:"certified",source_ref:$source,app_image:$app,chromium_image:$chromium}' >nams-release.json
+
+      - name: Upload certification evidence
         uses: actions/upload-artifact@v4
         with:
-          name: nams-v6-release
-          path: nams-v6-release.txt
+          name: nams-certified-release
+          path: nams-release.json
           retention-days: 30
+
+  deploy:
+    name: Install, cut over and verify Oracle production
+    needs: certify
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 100
+    steps:
+      - name: Checkout deployment controller
+        uses: actions/checkout@v4
+
+      - name: Validate deployment scripts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash -n nams-deploy/install-certified.sh
+          bash -n nams-deploy/oracle-controller.sh
+          bash -n nams-deploy/run-secure-controller.sh
+
+      - name: Check unavoidable OCI credential requirements
+        shell: bash
+        env:
+          OCI_PRIVATE_KEY_PEM: ${{ secrets.OCI_PRIVATE_KEY }}
+          OCI_FINGERPRINT_VALUE: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_USER_VALUE: ${{ secrets.OCI_USER_OCID }}
+          OCI_TENANCY_VALUE: ${{ secrets.OCI_TENANCY_OCID }}
+        run: |
+          set -Eeuo pipefail
+          missing=()
+          [ -n "$OCI_PRIVATE_KEY_PEM" ] || missing+=(OCI_PRIVATE_KEY)
+          [ -n "$OCI_FINGERPRINT_VALUE" ] || missing+=(OCI_FINGERPRINT)
+          [ -n "$OCI_USER_VALUE" ] || missing+=(OCI_USER_OCID)
+          [ -n "$OCI_TENANCY_VALUE" ] || missing+=(OCI_TENANCY_OCID)
+          if [ ${#missing[@]} -gt 0 ]; then
+            printf 'Missing required production secrets: %s\n' "${missing[*]}" >&2
+            jq -n --arg missing "${missing[*]}" '{status:"blocked",phase:"credentials",message:("Missing GitHub production secrets: "+$missing)}' >nams-deployment-result.json
+            exit 78
+          fi
+
+      - name: Configure OCI CLI
+        shell: bash
+        env:
+          OCI_PRIVATE_KEY_PEM: ${{ secrets.OCI_PRIVATE_KEY }}
+          OCI_FINGERPRINT_VALUE: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_USER_VALUE: ${{ secrets.OCI_USER_OCID }}
+          OCI_TENANCY_VALUE: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_REGION_VALUE: ${{ vars.OCI_REGION || 'ap-mumbai-1' }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$HOME/.oci"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          value=os.environ['OCI_PRIVATE_KEY_PEM'].strip()
+          if len(value)>=2 and value[0]==value[-1] and value[0] in {'"',"'"}: value=value[1:-1]
+          if '\\n' in value and '\n' not in value: value=value.replace('\\r','').replace('\\n','\n')
+          Path.home().joinpath('.oci/key.pem').write_text(value.replace('\r','').strip()+'\n')
+          PY
+          chmod 600 "$HOME/.oci/key.pem"
+          cat >"$HOME/.oci/config" <<EOF
+          [DEFAULT]
+          user=$OCI_USER_VALUE
+          fingerprint=$(printf '%s' "$OCI_FINGERPRINT_VALUE" | tr -d '[:space:]')
+          tenancy=$OCI_TENANCY_VALUE
+          region=$OCI_REGION_VALUE
+          key_file=$HOME/.oci/key.pem
+          EOF
+          chmod 600 "$HOME/.oci/config"
+          pipx install --quiet oci-cli
+          echo "$HOME/.local/bin" >>"$GITHUB_PATH"
+
+      - name: Set up Docker Buildx for manifest verification
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR for production image verification
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Transactional Oracle installation
+        shell: bash
+        env:
+          OCI_REGION: ${{ vars.OCI_REGION || 'ap-mumbai-1' }}
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_COMPARTMENT_OCID: ${{ vars.OCI_COMPARTMENT_OCID }}
+          OCI_COMPARTMENT_NAME: NituWAGateway
+          OCI_REFERENCE_INSTANCE: NituTravelsWAHA-20260719T184923Z
+          OCI_TARGET_INSTANCE: NAMS-Lightpanda-Agent
+          OCI_NSG_NAME: NAMS-Lightpanda-NSG
+          OCI_RESERVED_IP: ${{ vars.NAMS_RESERVED_IP || '161.118.166.225' }}
+          NAMS_DOMAIN: ${{ vars.NAMS_DOMAIN || 'seo.nitutravels.in' }}
+          NAMS_SOURCE_REF: ${{ env.SOURCE_REF }}
+          NAMS_IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          NAMS_DEPLOY_REF: ${{ github.sha }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NAMS_RESULT_FILE: nams-deployment-result.json
+        run: |
+          set -Eeuo pipefail
+          chmod 700 nams-deploy/*.sh
+          nams-deploy/run-secure-controller.sh
+
+      - name: Write deployment summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f nams-deployment-result.json ]; then
+            echo '## NAMS deployment result' >>"$GITHUB_STEP_SUMMARY"
+            echo '```json' >>"$GITHUB_STEP_SUMMARY"
+            cat nams-deployment-result.json >>"$GITHUB_STEP_SUMMARY"
+            echo '```' >>"$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f nams-token-retrieval.txt ]; then
+            echo '## Secure token retrieval' >>"$GITHUB_STEP_SUMMARY"
+            echo 'The token was stored inside the OCI instance freeform tags and was not printed in public logs.' >>"$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload deployment evidence and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nams-production-deployment
+          path: |
+            nams-deployment-result.json
+            nams-token-retrieval.txt
+            nams-deployment-diagnostics.tgz
+          if-no-files-found: warn
+          retention-days: 14
