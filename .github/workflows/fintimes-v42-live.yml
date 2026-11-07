@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: 4914da19d0048e6003c2d1e231f92f6912c186d0
+          ref: 53c034f7ea9c7866b932c37e3884def8360a5b15
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
@@ -71,7 +71,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: 4914da19d0048e6003c2d1e231f92f6912c186d0
+          ref: 53c034f7ea9c7866b932c37e3884def8360a5b15
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
@@ -114,6 +114,8 @@ jobs:
       - name: Install CPU newsroom and local voice
         if: steps.quota.outputs.can_run == 'true'
         run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           python -m pip install -r private/requirements-editor.txt -r private/requirements-v4.txt
           python -m piper.download_voices --data-dir "$RUNNER_TEMP/fintimes-voice" en_US-ljspeech-high
