@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: 390c5ecaa6a38542a615ea0d349b296f12676668
+          ref: 87d1e81efafbd2b4cb7f56e5a6399e074014183d
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
@@ -40,6 +40,7 @@ jobs:
           path: private/output/public_release.json
           retention-days: 30
       - name: Check authorized X configuration without consuming paid reads
+        if: always()
         env:
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           X_AUTHORIZED_FEED_URL: ${{ secrets.X_AUTHORIZED_FEED_URL }}
