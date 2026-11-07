@@ -1,0 +1,182 @@
+name: FinTimes v4.2 automatic newsroom
+on:
+  push:
+    branches: [main, fintimes-v42-live]
+    paths: ['.github/workflows/fintimes-v42-live.yml']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish if all evidence, model and daily-limit checks pass
+        type: boolean
+        default: true
+  schedule:
+    - cron: '0 15 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: fintimes-public-publishing
+  cancel-in-progress: false
+jobs:
+  release-owner-approved-pilot:
+    if: github.event_name == 'push' && github.event.head_commit.message == 'Publish owner-authorized FinTimes pilot' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: nitutravels/fintimesnews-automation
+          ref: 9d4ba43db33226a7f47429f04e1826526930e5c2
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: private
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install google-api-python-client google-auth Pillow
+      - name: Publish the existing pilot and confirm public visibility
+        working-directory: private
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: python -m fintimes_v4.public_release L6fbRY9ScC8
+      - name: Record public release receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: fintimes-v42-public-release
+          path: private/output/public_release.json
+          retention-days: 30
+      - name: Check authorized X configuration without consuming paid reads
+        if: always()
+        env:
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          X_AUTHORIZED_FEED_URL: ${{ secrets.X_AUTHORIZED_FEED_URL }}
+          X_FREE_READ_ENTITLEMENT: ${{ vars.X_FREE_READ_ENTITLEMENT }}
+          X_PROVIDER_ZERO_COST_CONFIRMED: ${{ vars.X_PROVIDER_ZERO_COST_CONFIRMED }}
+        run: |
+          python - <<'PY'
+          import os,json
+          print(json.dumps({'x_bearer_configured':bool(os.getenv('X_BEARER_TOKEN')),'authorized_feed_configured':bool(os.getenv('X_AUTHORIZED_FEED_URL')),'paid_reads_attempted':False}))
+          PY
+      - if: always()
+        run: rm -rf private
+  automatic-newsroom:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'Validate automatic newsroom')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      DRY_RUN: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.publish) }}
+      PIP_NO_CACHE_DIR: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: nitutravels/fintimesnews-automation
+          ref: 9d4ba43db33226a7f47429f04e1826526930e5c2
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: private
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install publication quota dependencies
+        run: python -m pip install google-api-python-client google-auth Pillow
+      - name: Check channel and daily publication limit
+        id: quota
+        working-directory: private
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: |
+          python - <<'PY'
+          import os,json,pathlib
+          from fintimes_v4.auto_pipeline import public_count_today
+          from fintimes_v4.public_release import youtube_client
+          count=public_count_today(youtube_client())
+          policy=json.loads(pathlib.Path('config/production.json').read_text())
+          run=os.getenv('DRY_RUN')=='true' or (policy.get('public_publishing_enabled',False) and count<int(policy['max_publications_per_ist_day']))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('can_run='+str(run).lower()+'\n')
+          pathlib.Path('output').mkdir(exist_ok=True)
+          pathlib.Path('output/quota.json').write_text(json.dumps({'public_videos_today':count,'can_run':run,'dry_run':os.getenv('DRY_RUN')=='true'}))
+          print('Public videos today:',count,'Run production:',run)
+          PY
+      - name: Restore immutable public model checkpoint
+        if: steps.quota.outputs.can_run == 'true'
+        uses: actions/cache@v4
+        with:
+          path: private/model_research/minicpm-thinking
+          key: minicpm-v46-thinking-93d8f4b60ad5d1f763442cf4c19f2a71fa95af4a
+      - name: Restore publication journal
+        uses: actions/cache@v4
+        with:
+          path: private/state
+          key: fintimes-v42-publication-state-${{ github.run_id }}
+          restore-keys: fintimes-v42-publication-state-
+      - name: Install CPU newsroom and local voice
+        if: steps.quota.outputs.can_run == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r private/requirements-editor.txt -r private/requirements-v4.txt
+          python -m piper.download_voices --data-dir "$RUNNER_TEMP/fintimes-voice" en_US-ljspeech-high
+      - name: Restore trained adapter and immutable base
+        if: steps.quota.outputs.can_run == 'true'
+        working-directory: private
+        env:
+          HF_HUB_DISABLE_XET: '1'
+        run: |
+          python -m fintimes_v4.restore_adapter
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          snapshot_download('openbmb/MiniCPM-V-4.6-Thinking',revision='93d8f4b60ad5d1f763442cf4c19f2a71fa95af4a',allow_patterns=['*.json','*.jinja','*.safetensors'],local_dir='model_research/minicpm-thinking')
+          PY
+      - name: Research, automatically review, render and publish eligible news
+        if: steps.quota.outputs.can_run == 'true'
+        working-directory: private
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          X_AUTHORIZED_FEED_URL: ${{ secrets.X_AUTHORIZED_FEED_URL }}
+          X_FREE_READ_ENTITLEMENT: ${{ vars.X_FREE_READ_ENTITLEMENT }}
+          X_PROVIDER_ZERO_COST_CONFIRMED: ${{ vars.X_PROVIDER_ZERO_COST_CONFIRMED }}
+        run: |
+          if [ "$DRY_RUN" = true ]; then
+            python -m fintimes_v4.auto_pipeline --model model_research/minicpm-thinking --adapter models/editor --voice "$RUNNER_TEMP/fintimes-voice/en_US-ljspeech-high.onnx"
+          else
+            python -m fintimes_v4.auto_pipeline --model model_research/minicpm-thinking --adapter models/editor --voice "$RUNNER_TEMP/fintimes-voice/en_US-ljspeech-high.onnx" --publish
+          fi
+      - name: Retain only publication state
+        if: always()
+        working-directory: private
+        run: |
+          python - <<'PY'
+          import pathlib,sqlite3
+          p=pathlib.Path('state/newsroom.sqlite3')
+          if p.exists():
+              db=sqlite3.connect(p)
+              for t in ['candidates','feed_health']:
+                  try:db.execute('DELETE FROM '+t)
+                  except sqlite3.OperationalError:pass
+              db.commit();db.execute('VACUUM');db.close()
+          PY
+      - name: Save operational receipts only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fintimes-v42-receipts-${{ github.run_id }}
+          path: |
+            private/output/quota.json
+            private/output/automatic/run_report.json
+            private/output/automatic/*/youtube_result.json
+            private/output/automatic/*/public_release.json
+            private/state/newsroom.sqlite3
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Remove temporary private source and narration
+        if: always()
+        run: |
+          rm -rf private/fintimes_v4 private/stories private/models private/output
+          rm -rf "$RUNNER_TEMP/fintimes-voice"
