@@ -1,0 +1,52 @@
+name: FinTimes v4.2 automatic newsroom
+on:
+  push:
+    branches: [main, fintimes-v42-live]
+    paths: ['.github/workflows/fintimes-v42-live.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fintimes-public-publishing
+  cancel-in-progress: false
+jobs:
+  release-owner-approved-pilot:
+    if: github.event_name == 'push' && github.event.head_commit.message == 'Publish owner-authorized FinTimes pilot' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: nitutravels/fintimesnews-automation
+          ref: 390c5ecaa6a38542a615ea0d349b296f12676668
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: private
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install google-api-python-client google-auth Pillow
+      - name: Publish the existing pilot and confirm public visibility
+        working-directory: private
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: python -m fintimes_v4.public_release L6fbRY9ScC8
+      - name: Record public release receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: fintimes-v42-public-release
+          path: private/output/public_release.json
+          retention-days: 30
+      - name: Check authorized X configuration without consuming paid reads
+        env:
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          X_AUTHORIZED_FEED_URL: ${{ secrets.X_AUTHORIZED_FEED_URL }}
+        run: |
+          python - <<'PY'
+          import os,json
+          print(json.dumps({'x_bearer_configured':bool(os.getenv('X_BEARER_TOKEN')),'authorized_feed_configured':bool(os.getenv('X_AUTHORIZED_FEED_URL')),'paid_reads_attempted':False}))
+          PY
+      - if: always()
+        run: rm -rf private
