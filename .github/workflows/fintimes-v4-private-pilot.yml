@@ -1,0 +1,94 @@
+name: FinTimes v4 private pilot
+on:
+  push:
+    branches: [fintimes-v4-private-pilot]
+    paths: ['.github/workflows/fintimes-v4-private-pilot.yml']
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fintimes-v4-private-pilot
+  cancel-in-progress: false
+jobs:
+  pilot:
+    if: github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out reviewed private source
+        uses: actions/checkout@v4
+        with:
+          repository: nitutravels/fintimesnews-automation
+          ref: 8495ff9700fd2ccc6ac677eb14604ac2276d17f4
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: private
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install local production dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+          python -m pip install -r private/requirements-v4.txt
+          python -m piper.download_voices --data-dir "$RUNNER_TEMP/fintimes-v4-voices" en_US-ljspeech-high
+      - name: Check editorial controls
+        working-directory: private
+        run: python -m unittest discover -s tests -p test_fintimes_v4.py -v
+      - name: Render original Short
+        working-directory: private
+        run: python -m fintimes_v4.render stories/v4/pilot-us-jobs.json --model "$RUNNER_TEMP/fintimes-v4-voices/en_US-ljspeech-high.onnx" --output output/pilot
+      - name: Upload private pilot to the verified FinTimes channel
+        working-directory: private
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: python -m fintimes_v4.publish stories/v4/pilot-us-jobs.json --output output/pilot --db newsroom.sqlite3
+      - name: Record receipt only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fintimes-v4-private-pilot-receipt
+          path: |
+            private/output/pilot/youtube_result.json
+            private/output/pilot/qc.json
+            private/newsroom.sqlite3
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Remove temporary private production files
+        if: always()
+        run: |
+          rm -rf private
+          rm -rf "$RUNNER_TEMP/fintimes-v4-voices"
+  newsroom:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: nitutravels/fintimesnews-automation
+          ref: 8495ff9700fd2ccc6ac677eb14604ac2276d17f4
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: private
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Collect dated official research leads
+        working-directory: private
+        run: |
+          python -m fintimes_v4.newsroom discover
+          python -m fintimes_v4.newsroom report --output output/newsroom.json
+      - name: Save research coverage and source health
+        uses: actions/upload-artifact@v4
+        with:
+          name: fintimes-v4-research-${{ github.run_id }}
+          path: private/output/newsroom.json
+          retention-days: 7
+      - name: Remove private source
+        if: always()
+        run: rm -rf private
