@@ -1,7 +1,7 @@
 name: FinTimes v4 private pilot
 on:
   push:
-    branches: [fintimes-v4-private-pilot]
+    branches: [main, fintimes-v4-private-pilot]
     paths: ['.github/workflows/fintimes-v4-private-pilot.yml']
   schedule:
     - cron: '17 * * * *'
@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   pilot:
-    if: github.event_name == 'push' && github.run_attempt == 1
+    if: github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Run FinTimes v4 private pilot and hourly research collection'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: 8495ff9700fd2ccc6ac677eb14604ac2276d17f4
+          ref: 18d65b821b2afffa7dc3d9dc0b08c6fc4f1d5079
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
@@ -64,14 +64,14 @@ jobs:
           rm -rf private
           rm -rf "$RUNNER_TEMP/fintimes-v4-voices"
   newsroom:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: 8495ff9700fd2ccc6ac677eb14604ac2276d17f4
+          ref: 18d65b821b2afffa7dc3d9dc0b08c6fc4f1d5079
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
@@ -91,4 +91,34 @@ jobs:
           retention-days: 7
       - name: Remove private source
         if: always()
+        run: rm -rf private
+  verify-pilot:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, 'verify-private-pilot')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: nitutravels/fintimesnews-automation
+          ref: 18d65b821b2afffa7dc3d9dc0b08c6fc4f1d5079
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: private
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install google-api-python-client google-auth Pillow
+      - name: Confirm private visibility and completed processing
+        working-directory: private
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: python -m fintimes_v4.verify_upload L6fbRY9ScC8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fintimes-v4-verified-pilot
+          path: private/output/verified_upload.json
+          retention-days: 7
+      - if: always()
         run: rm -rf private
