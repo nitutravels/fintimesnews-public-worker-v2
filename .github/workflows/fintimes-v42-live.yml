@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: 53c034f7ea9c7866b932c37e3884def8360a5b15
+          ref: 9d4ba43db33226a7f47429f04e1826526930e5c2
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
@@ -71,7 +71,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: 53c034f7ea9c7866b932c37e3884def8360a5b15
+          ref: 9d4ba43db33226a7f47429f04e1826526930e5c2
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
@@ -93,7 +93,8 @@ jobs:
           from fintimes_v4.auto_pipeline import public_count_today
           from fintimes_v4.public_release import youtube_client
           count=public_count_today(youtube_client())
-          run=os.getenv('DRY_RUN')=='true' or count<1
+          policy=json.loads(pathlib.Path('config/production.json').read_text())
+          run=os.getenv('DRY_RUN')=='true' or (policy.get('public_publishing_enabled',False) and count<int(policy['max_publications_per_ist_day']))
           with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('can_run='+str(run).lower()+'\n')
           pathlib.Path('output').mkdir(exist_ok=True)
           pathlib.Path('output/quota.json').write_text(json.dumps({'public_videos_today':count,'can_run':run,'dry_run':os.getenv('DRY_RUN')=='true'}))
