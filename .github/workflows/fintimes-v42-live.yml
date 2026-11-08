@@ -1,8 +1,5 @@
 name: FinTimes verified long editions and fresh X Shorts
 on:
-  push:
-    branches: [main, fintimes-v42-live]
-    paths: ['.github/workflows/fintimes-v42-live.yml']
   workflow_dispatch:
     inputs:
       publish:
@@ -73,7 +70,7 @@ jobs:
       - if: always()
         run: rm -rf private
   automatic-newsroom:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'Validate automatic newsroom')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     concurrency:
