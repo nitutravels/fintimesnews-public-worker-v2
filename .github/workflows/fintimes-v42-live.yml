@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: 9d4ba43db33226a7f47429f04e1826526930e5c2
+          ref: 1a6e0147f6a6323bd777c22eeef671a212dc618a
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
@@ -49,6 +49,10 @@ jobs:
       - name: Check authorized X configuration without consuming paid reads
         if: always()
         env:
+          X_COLLECTION_BACKEND: twscrape
+          X_SCRAPER_COOKIES: ${{ secrets.X_SCRAPER_COOKIES }}
+          X_SCRAPER_HEALTH_PATH: x-state/health.json
+          TWS_TELEMETRY: '0'
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           X_AUTHORIZED_FEED_URL: ${{ secrets.X_AUTHORIZED_FEED_URL }}
           X_FREE_READ_ENTITLEMENT: ${{ vars.X_FREE_READ_ENTITLEMENT }}
@@ -64,6 +68,9 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'Validate automatic newsroom')
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    concurrency:
+      group: fintimes-x-owner-session
+      cancel-in-progress: false
     env:
       DRY_RUN: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.publish) }}
       PIP_NO_CACHE_DIR: '1'
@@ -71,7 +78,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: 9d4ba43db33226a7f47429f04e1826526930e5c2
+          ref: 1a6e0147f6a6323bd777c22eeef671a212dc618a
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
@@ -112,13 +119,19 @@ jobs:
           path: private/state
           key: fintimes-v42-publication-state-${{ github.run_id }}
           restore-keys: fintimes-v42-publication-state-
+      - name: Restore sanitized X cooldown
+        uses: actions/cache@v4
+        with:
+          path: private/x-state
+          key: fintimes-x-health-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: fintimes-x-health-
       - name: Install CPU newsroom and local voice
         if: steps.quota.outputs.can_run == 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install -r private/requirements-editor.txt -r private/requirements-v4.txt
+          python -m pip install -r private/requirements-editor.txt -r private/requirements-v4.txt -r private/requirements-x.txt
           python -m piper.download_voices --data-dir "$RUNNER_TEMP/fintimes-voice" en_US-ljspeech-high
       - name: Restore trained adapter and immutable base
         if: steps.quota.outputs.can_run == 'true'
@@ -138,6 +151,10 @@ jobs:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          X_COLLECTION_BACKEND: twscrape
+          X_SCRAPER_COOKIES: ${{ secrets.X_SCRAPER_COOKIES }}
+          X_SCRAPER_HEALTH_PATH: x-state/health.json
+          TWS_TELEMETRY: '0'
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           X_AUTHORIZED_FEED_URL: ${{ secrets.X_AUTHORIZED_FEED_URL }}
           X_FREE_READ_ENTITLEMENT: ${{ vars.X_FREE_READ_ENTITLEMENT }}
@@ -180,3 +197,4 @@ jobs:
         run: |
           rm -rf private/fintimes_v4 private/stories private/models private/output
           rm -rf "$RUNNER_TEMP/fintimes-voice"
+

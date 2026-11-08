@@ -1,4 +1,4 @@
-name: FinTimes v4 private pilot
+name: FinTimes hourly X and official research
 on:
   push:
     branches: [main, fintimes-v4-private-pilot]
@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: 9d4ba43db33226a7f47429f04e1826526930e5c2
+          ref: 1a6e0147f6a6323bd777c22eeef671a212dc618a
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
@@ -67,20 +67,38 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    concurrency:
+      group: fintimes-x-owner-session
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: 9d4ba43db33226a7f47429f04e1826526930e5c2
+          ref: 1a6e0147f6a6323bd777c22eeef671a212dc618a
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Collect dated official research leads
+      - name: Install pinned GitHub X scraper
+        run: python -m pip install -r private/requirements-x.txt Pillow==13.0.0
+      - name: Test X collection and editorial controls
+        working-directory: private
+        run: python -m unittest discover -s tests -v
+      - name: Restore sanitized X cooldown
+        uses: actions/cache@v4
+        with:
+          path: private/x-state
+          key: fintimes-x-health-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: fintimes-x-health-
+      - name: Collect X and dated official research leads
         working-directory: private
         env:
+          X_COLLECTION_BACKEND: twscrape
+          X_SCRAPER_COOKIES: ${{ secrets.X_SCRAPER_COOKIES }}
+          X_SCRAPER_HEALTH_PATH: x-state/health.json
+          TWS_TELEMETRY: '0'
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           X_AUTHORIZED_FEED_URL: ${{ secrets.X_AUTHORIZED_FEED_URL }}
           X_FREE_READ_ENTITLEMENT: ${{ vars.X_FREE_READ_ENTITLEMENT }}
@@ -94,9 +112,9 @@ jobs:
           name: fintimes-v4-research-${{ github.run_id }}
           path: private/output/newsroom.json
           retention-days: 7
-      - name: Remove private source
+      - name: Remove private source and transient research
         if: always()
-        run: rm -rf private
+        run: find private -mindepth 1 -maxdepth 1 ! -name x-state -exec rm -rf -- {} +
   verify-pilot:
     if: github.event_name == 'push' && contains(github.event.head_commit.message, 'verify-private-pilot')
     runs-on: ubuntu-latest
@@ -105,7 +123,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: 9d4ba43db33226a7f47429f04e1826526930e5c2
+          ref: 1a6e0147f6a6323bd777c22eeef671a212dc618a
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
@@ -127,3 +145,4 @@ jobs:
           retention-days: 7
       - if: always()
         run: rm -rf private
+
