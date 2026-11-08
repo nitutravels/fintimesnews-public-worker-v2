@@ -84,7 +84,7 @@ jobs:
       PIP_NO_CACHE_DIR: '1'
       EDITION_MODE: ${{ github.event_name == 'schedule' && github.event.schedule != '25 * * * *' && 'long' || inputs.mode || 'short' }}
       FINTIMES_DURABLE_JOURNAL: '1'
-      GH_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN }}
+      GH_TOKEN: ${{ secrets.FINTIMES_JOURNAL_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -118,6 +118,10 @@ jobs:
       - name: Restore durable publication journal and check lane quota
         id: quota
         working-directory: private
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: |
           python -m fintimes_v4.journal_sync pull
           python - <<'PY'
