@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: f6b693d
+          ref: f6b693d09cc06dc4a4378ced2897b844b1e9073e
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
@@ -89,7 +89,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: f6b693d
+          ref: f6b693d09cc06dc4a4378ced2897b844b1e9073e
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
