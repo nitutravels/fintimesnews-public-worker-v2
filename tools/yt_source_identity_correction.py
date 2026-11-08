@@ -13,8 +13,9 @@ def main():
     if [c['id'] for c in channels]!=[CHANNEL]:raise RuntimeError('Wrong channel')
     playlist=channels[0]['contentDetails']['relatedPlaylists']['uploads']
     uploads=yt.playlistItems().list(part='snippet,contentDetails',playlistId=playlist,maxResults=50).execute().get('items',[])
-    ids=[u['contentDetails']['videoId'] for u in uploads if u['snippet']['title'].startswith('UNVERIFIED:')]
+    ids=[u['contentDetails']['videoId'] for u in uploads if u['snippet']['title'].upper().startswith('UNVERIFIED:')]
     rows=yt.videos().list(part='snippet',id=','.join(ids)).execute().get('items',[]) if ids else []
+    print('RECENT_TITLES',json.dumps([{'id':u['contentDetails']['videoId'],'title':u['snippet']['title']} for u in uploads]))
     receipts=[]
     for row in rows:
         old=row['snippet']
@@ -35,7 +36,9 @@ def main():
         description='\n'.join(text).replace('Source image and link follow.','Source screenshot follows.')
         note='Original source credit appears only in the screenshot at the end of the video.'
         if note not in description:description+='\n'+note
-        if title==old['title'] and description==original:continue
+        if title==old['title'] and description==original:
+            receipts.append({'videoId':row['id'],'title':title,'description_has_handle':bool(re.search(r'@[A-Za-z0-9_]+',description)),'verified':True,'already_correct':True})
+            continue
         snippet={k:v for k,v in old.items() if k in {'title','description','tags','categoryId','defaultLanguage','defaultAudioLanguage'}}
         snippet.update(title=title,description=description)
         snippet['tags']=[t for t in snippet.get('tags',[]) if not any(h.casefold() in t.casefold() for h in handles|set(authors))]
