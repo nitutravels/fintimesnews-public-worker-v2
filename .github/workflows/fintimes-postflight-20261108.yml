@@ -1,0 +1,28 @@
+name: FinTimes 2026-11-08 postflight and thumbnail
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  postflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install google-api-python-client google-auth
+      - name: Inspect published status and retry custom thumbnail
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: python tools/yt_postflight_20261108.py
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fintimes-20261108-postflight
+          path: tools/postflight_receipt.json
+          retention-days: 14
+          if-no-files-found: warn
