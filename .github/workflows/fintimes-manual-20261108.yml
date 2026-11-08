@@ -1,0 +1,40 @@
+name: FinTimes owner-requested weekly-market explainer upload
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Read-only preflight, or guarded upload of the verified FinTimes episode"
+        required: true
+        type: choice
+        options: [preflight, upload]
+        default: preflight
+permissions:
+  contents: read
+concurrency:
+  group: fintimes-public-publishing
+  cancel-in-progress: false
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install official YouTube API client
+        run: python -m pip install google-api-python-client google-auth
+      - name: Verified FinTimes channel preflight and one-off upload
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: python tools/yt_manual_upload_20261108.py "${{ inputs.mode }}"
+      - name: Preserve only sanitized upload receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fintimes-owner-upload-receipt-${{ github.run_id }}
+          path: tools/upload_receipt.json
+          retention-days: 30
+          if-no-files-found: warn
