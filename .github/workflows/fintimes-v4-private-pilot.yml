@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: df6046877f16821ac8c1206b4cd870bddc9a5573
+          ref: 06ba7d55f515d48ff28e6973245dad04b2196c54
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
@@ -74,7 +74,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: df6046877f16821ac8c1206b4cd870bddc9a5573
+          ref: 06ba7d55f515d48ff28e6973245dad04b2196c54
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
@@ -135,7 +135,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nitutravels/fintimesnews-automation
-          ref: df6046877f16821ac8c1206b4cd870bddc9a5573
+          ref: 06ba7d55f515d48ff28e6973245dad04b2196c54
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: private
           persist-credentials: false
