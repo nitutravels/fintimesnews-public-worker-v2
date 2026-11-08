@@ -1,5 +1,5 @@
 """Owner-requested removal of unverified-source identities from published text."""
-import json,re
+import json,re,time
 from pathlib import Path
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -41,8 +41,13 @@ def main():
         snippet['tags']=[t for t in snippet.get('tags',[]) if not any(h.casefold() in t.casefold() for h in handles|set(authors))]
         if re.search(r'@[A-Za-z0-9_]+',title+' '+description):raise RuntimeError('Source handle still present')
         yt.videos().update(part='snippet',body={'id':row['id'],'snippet':snippet}).execute()
-        actual=yt.videos().list(part='snippet',id=row['id']).execute()['items'][0]['snippet']
-        if actual['title']!=title or actual['description']!=description:raise RuntimeError('Metadata update not confirmed')
+        for attempt in range(8):
+            actual=yt.videos().list(part='snippet',id=row['id']).execute()['items'][0]['snippet']
+            if actual['title']==title and actual['description'].strip()==description.strip():break
+            time.sleep(4)
+        else:
+            print(json.dumps({'id':row['id'],'expected_title':title,'actual_title':actual['title'],'description_matches':actual['description'].strip()==description.strip()}))
+            raise RuntimeError('Metadata update not confirmed')
         receipts.append({'videoId':row['id'],'previous_title':old['title'],'title':title,'verified':True})
     Path('source_identity_corrections.json').write_text(json.dumps(receipts,indent=2))
     print(json.dumps(receipts,indent=2))
