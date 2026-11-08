@@ -1,0 +1,32 @@
+name: Release the owner-approved FinTimes episode immediately
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fintimes-public-publishing
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install google-api-python-client google-auth
+      - name: Verify FinTimes channel and release exact existing video
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: python tools/yt_release_now_20261108.py
+      - name: Keep sanitized release receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fintimes-immediate-release-${{ github.run_id }}
+          path: tools/immediate_release_receipt.json
+          retention-days: 30
+          if-no-files-found: warn
